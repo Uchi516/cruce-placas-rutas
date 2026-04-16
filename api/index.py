@@ -182,8 +182,8 @@ HTML_PAGE = """<!DOCTYPE html>
     <!-- NAV -->
     <nav class="nav">
         <span class="nav-brand">PROCESOS EXCEL</span>
-        <button class="nav-tab active" onclick="switchTab('cruce')">Cruce Placas Rutas</button>
-        <button class="nav-tab" onclick="switchTab('nuevo')">Nuevo Proceso</button>
+        <button class="nav-tab active" onclick="switchTab('cruce', this)">Cruce Placas Rutas</button>
+        <button class="nav-tab" onclick="switchTab('nuevo', this)">Nuevo Proceso</button>
     </nav>
 
     <div class="main">
@@ -265,11 +265,11 @@ HTML_PAGE = """<!DOCTYPE html>
 
     <script>
         // === TAB SWITCHING ===
-        function switchTab(tab) {
+        function switchTab(tab, btn) {
             document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
             document.getElementById('tab-' + tab).classList.add('active');
-            event.target.classList.add('active');
+            btn.classList.add('active');
         }
 
         // === TAB 1: CRUCE PLACAS RUTAS ===
@@ -346,7 +346,11 @@ HTML_PAGE = """<!DOCTYPE html>
                 status.textContent = 'Error: ' + err.message;
             }
             btnProcesar.textContent = 'Procesar Archivos';
-            btnProcesar.disabled = false;
+            checkReady();
+            // Reset steps for next run
+            document.getElementById('step1').className = 'step active';
+            document.getElementById('step2').className = 'step';
+            document.getElementById('step3').className = 'step';
         });
 
         // === TAB 2: NUEVO PROCESO ===
@@ -439,7 +443,7 @@ HTML_PAGE = """<!DOCTYPE html>
             checkNuevoReady();
         });
     </script>
-    <div class="version-tag">v1.6 | Actualizado: 16/04/2026 09:53</div>
+    <div class="version-tag">v1.7 | Actualizado: 16/04/2026 10:01</div>
 </body>
 </html>"""
 
@@ -465,8 +469,8 @@ def procesar_archivos():
         return jsonify({'error': 'Los archivos deben ser .xlsx'}), 400
 
     tmp_dir = tempfile.mkdtemp()
-    ruta1 = os.path.join(tmp_dir, archivo1.filename)
-    ruta2 = os.path.join(tmp_dir, archivo2.filename)
+    ruta1 = os.path.join(tmp_dir, '1_' + archivo1.filename)
+    ruta2 = os.path.join(tmp_dir, '2_' + archivo2.filename)
     archivo1.save(ruta1)
     archivo2.save(ruta2)
 
