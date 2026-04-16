@@ -231,10 +231,10 @@ def build_new_sheet_xml(rows_data):
                 v_el = ET.SubElement(c_el, f'{{{NS}}}v')
                 v_el.text = str(value)
             elif isinstance(value, dt_time):
-                c_el.set('t', 'inlineStr')
-                is_el = ET.SubElement(c_el, f'{{{NS}}}is')
-                t_el = ET.SubElement(is_el, f'{{{NS}}}t')
-                t_el.text = value.strftime("%H:%M:%S")
+                # Write as numeric time value with style referencing numFmtId 20 (h:mm)
+                c_el.set('s', '4')  # style index 4 = numFmtId 21 (h:mm:ss) in this workbook
+                v_el = ET.SubElement(c_el, f'{{{NS}}}v')
+                v_el.text = str((value.hour * 3600 + value.minute * 60 + value.second) / 86400)
             else:
                 c_el.set('t', 'inlineStr')
                 is_el = ET.SubElement(c_el, f'{{{NS}}}is')
