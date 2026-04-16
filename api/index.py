@@ -23,6 +23,7 @@ HTML_PAGE = """<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Procesos Excel</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%23217346'/><path d='M25 20h50a5 5 0 0 1 5 5v50a5 5 0 0 1-5 5H25a5 5 0 0 1-5-5V25a5 5 0 0 1 5-5z' fill='%231D6B3F'/><text x='50' y='68' font-family='Arial,sans-serif' font-size='45' font-weight='bold' fill='white' text-anchor='middle'>X</text></svg>">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -438,7 +439,7 @@ HTML_PAGE = """<!DOCTYPE html>
             checkNuevoReady();
         });
     </script>
-    <div class="version-tag">v1.4 | Actualizado: 16/04/2026 09:39</div>
+    <div class="version-tag">v1.5 | Actualizado: 16/04/2026 09:45</div>
 </body>
 </html>"""
 
