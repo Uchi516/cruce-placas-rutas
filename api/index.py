@@ -315,8 +315,9 @@ HTML_PAGE = """<!DOCTYPE html>
             try {
                 const response = await fetch('/api/procesar', { method: 'POST', body: formData });
                 if (!response.ok) {
-                    const data = await response.json();
-                    throw new Error(data.error || 'Error desconocido');
+                    let msg = 'Error del servidor (HTTP ' + response.status + ')';
+                    try { const data = await response.json(); msg = data.error || msg; } catch(e) {}
+                    throw new Error(msg);
                 }
                 const blob = await response.blob();
                 const url = window.URL.createObjectURL(blob);
@@ -414,8 +415,9 @@ HTML_PAGE = """<!DOCTYPE html>
             try {
                 const response = await fetch('/api/nuevo-proceso', { method: 'POST', body: formData });
                 if (!response.ok) {
-                    const data = await response.json();
-                    throw new Error(data.error || 'Error desconocido');
+                    let msg = 'Error del servidor (HTTP ' + response.status + ')';
+                    try { const data = await response.json(); msg = data.error || msg; } catch(e) {}
+                    throw new Error(msg);
                 }
                 const blob = await response.blob();
                 const url = window.URL.createObjectURL(blob);
@@ -436,7 +438,7 @@ HTML_PAGE = """<!DOCTYPE html>
             checkNuevoReady();
         });
     </script>
-    <div class="version-tag">v1.2 | Actualizado: 16/04/2026 07:54</div>
+    <div class="version-tag">v1.3 | Actualizado: 16/04/2026 07:55</div>
 </body>
 </html>"""
 
