@@ -1,10 +1,13 @@
 """
 Vercel serverless handler for the Excel processing app.
+Multi-process platform with tabs.
 """
 
 import os
 import sys
+import io
 import tempfile
+import zipfile
 from flask import Flask, request, send_file, jsonify, Response
 
 # Add parent dir to path so we can import procesar_excel
@@ -19,22 +22,49 @@ HTML_PAGE = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema Excel - Picking Center</title>
+    <title>Procesos Excel</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: #0f172a; color: #e2e8f0;
-            min-height: 100vh; display: flex; align-items: center; justify-content: center;
+            min-height: 100vh;
         }
-        .container { width: 100%; max-width: 600px; padding: 20px; }
+
+        /* --- NAV TABS --- */
+        .nav {
+            display: flex; align-items: center;
+            background: #1e293b; border-bottom: 1px solid #334155;
+            padding: 0 24px; gap: 4px;
+        }
+        .nav-brand {
+            font-size: 15px; font-weight: 700; color: #94a3b8;
+            margin-right: 24px; padding: 16px 0;
+            letter-spacing: 0.5px;
+        }
+        .nav-tab {
+            padding: 14px 20px; font-size: 14px; font-weight: 500;
+            color: #64748b; cursor: pointer; border: none; background: none;
+            border-bottom: 2px solid transparent; transition: all 0.2s;
+        }
+        .nav-tab:hover { color: #e2e8f0; }
+        .nav-tab.active { color: #3b82f6; border-bottom-color: #3b82f6; }
+
+        /* --- MAIN --- */
+        .main { display: flex; align-items: center; justify-content: center; min-height: calc(100vh - 53px); padding: 24px; }
+        .tab-content { display: none; width: 100%; max-width: 640px; }
+        .tab-content.active { display: block; }
+
+        /* --- CARD --- */
         .card {
             background: #1e293b; border-radius: 16px; padding: 40px;
             box-shadow: 0 25px 50px rgba(0,0,0,0.4); border: 1px solid #334155;
         }
-        .logo { text-align: center; margin-bottom: 32px; }
-        .logo h1 { font-size: 24px; font-weight: 700; color: #f8fafc; margin-bottom: 4px; }
-        .logo p { color: #94a3b8; font-size: 14px; }
+        .card-title { text-align: center; margin-bottom: 32px; }
+        .card-title h2 { font-size: 22px; font-weight: 700; color: #f8fafc; margin-bottom: 4px; }
+        .card-title p { color: #94a3b8; font-size: 14px; }
+
+        /* --- UPLOAD --- */
         .upload-section { margin-bottom: 24px; }
         .upload-section label {
             display: block; font-size: 13px; font-weight: 600; color: #94a3b8;
@@ -54,6 +84,39 @@ HTML_PAGE = """<!DOCTYPE html>
         .upload-icon { font-size: 32px; margin-bottom: 8px; }
         .upload-text { color: #64748b; font-size: 14px; }
         .upload-text .filename { color: #22c55e; font-weight: 600; }
+
+        /* --- FORM FIELDS --- */
+        .field { margin-bottom: 20px; }
+        .field label {
+            display: block; font-size: 13px; font-weight: 600; color: #94a3b8;
+            text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
+        }
+        .field input[type="text"], .field textarea {
+            width: 100%; background: #0f172a; border: 1px solid #334155;
+            border-radius: 10px; padding: 14px 16px; color: #e2e8f0;
+            font-size: 14px; font-family: inherit; transition: border-color 0.2s;
+            outline: none;
+        }
+        .field input[type="text"]:focus, .field textarea:focus { border-color: #3b82f6; }
+        .field textarea { min-height: 160px; resize: vertical; line-height: 1.6; }
+        .field .hint { color: #475569; font-size: 12px; margin-top: 6px; }
+
+        /* --- FILE LIST --- */
+        .file-list { margin-top: 12px; }
+        .file-item {
+            display: flex; align-items: center; justify-content: space-between;
+            background: #0f172a; border: 1px solid #334155; border-radius: 8px;
+            padding: 10px 14px; margin-bottom: 8px; font-size: 13px;
+        }
+        .file-item .fname { color: #22c55e; font-weight: 600; }
+        .file-item .fsize { color: #64748b; }
+        .file-item .remove-btn {
+            background: none; border: none; color: #ef4444; cursor: pointer;
+            font-size: 16px; padding: 0 4px; line-height: 1;
+        }
+        .file-item .remove-btn:hover { color: #f87171; }
+
+        /* --- BUTTONS --- */
         .btn {
             width: 100%; padding: 16px; border: none; border-radius: 12px;
             font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s; margin-top: 8px;
@@ -67,6 +130,10 @@ HTML_PAGE = """<!DOCTYPE html>
             background: #334155; color: #64748b; cursor: not-allowed;
             transform: none; box-shadow: none;
         }
+        .btn-secondary { background: #334155; color: #e2e8f0; }
+        .btn-secondary:hover { background: #475569; transform: translateY(-1px); }
+
+        /* --- STATUS --- */
         .status {
             margin-top: 20px; padding: 16px; border-radius: 10px;
             font-size: 14px; display: none;
@@ -90,6 +157,8 @@ HTML_PAGE = """<!DOCTYPE html>
             vertical-align: middle; margin-right: 8px;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* --- STEPS --- */
         .steps { display: flex; justify-content: center; gap: 32px; margin-bottom: 32px; }
         .step { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #64748b; }
         .step-num {
@@ -102,42 +171,100 @@ HTML_PAGE = """<!DOCTYPE html>
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="card">
-            <div class="logo">
-                <h1>Sistema Excel</h1>
-                <p>Picking Center - Procesamiento de Rutas</p>
-            </div>
-            <div class="steps">
-                <div class="step active" id="step1"><span class="step-num">1</span><span>Subir</span></div>
-                <div class="step" id="step2"><span class="step-num">2</span><span>Procesar</span></div>
-                <div class="step" id="step3"><span class="step-num">3</span><span>Descargar</span></div>
-            </div>
-            <form id="uploadForm">
-                <div class="upload-section">
-                    <label>Archivo 1 - Programacion de Placas</label>
-                    <div class="upload-area" id="area1">
-                        <input type="file" name="archivo1" id="archivo1" accept=".xlsx">
-                        <div class="upload-icon">📄</div>
-                        <div class="upload-text" id="text1">Arrastra o haz clic para seleccionar</div>
-                    </div>
+    <!-- NAV -->
+    <nav class="nav">
+        <span class="nav-brand">PROCESOS EXCEL</span>
+        <button class="nav-tab active" onclick="switchTab('cruce')">Cruce Placas Rutas</button>
+        <button class="nav-tab" onclick="switchTab('nuevo')">Nuevo Proceso</button>
+    </nav>
+
+    <div class="main">
+        <!-- TAB 1: CRUCE PLACAS RUTAS -->
+        <div class="tab-content active" id="tab-cruce">
+            <div class="card">
+                <div class="card-title">
+                    <h2>Cruce Placas Rutas</h2>
+                    <p>Picking Center - Procesamiento de Rutas</p>
                 </div>
-                <div class="upload-section">
-                    <label>Archivo 2 - Programacion PC</label>
-                    <div class="upload-area" id="area2">
-                        <input type="file" name="archivo2" id="archivo2" accept=".xlsx">
-                        <div class="upload-icon">📄</div>
-                        <div class="upload-text" id="text2">Arrastra o haz clic para seleccionar</div>
-                    </div>
+                <div class="steps">
+                    <div class="step active" id="step1"><span class="step-num">1</span><span>Subir</span></div>
+                    <div class="step" id="step2"><span class="step-num">2</span><span>Procesar</span></div>
+                    <div class="step" id="step3"><span class="step-num">3</span><span>Descargar</span></div>
                 </div>
-                <button type="submit" class="btn btn-primary" id="btnProcesar" disabled>
-                    Procesar Archivos
-                </button>
-            </form>
-            <div class="status" id="status"></div>
+                <form id="uploadForm">
+                    <div class="upload-section">
+                        <label>Archivo 1 - Programacion de Placas</label>
+                        <div class="upload-area" id="area1">
+                            <input type="file" name="archivo1" id="archivo1" accept=".xlsx">
+                            <div class="upload-icon">&#128196;</div>
+                            <div class="upload-text" id="text1">Arrastra o haz clic para seleccionar</div>
+                        </div>
+                    </div>
+                    <div class="upload-section">
+                        <label>Archivo 2 - Programacion PC</label>
+                        <div class="upload-area" id="area2">
+                            <input type="file" name="archivo2" id="archivo2" accept=".xlsx">
+                            <div class="upload-icon">&#128196;</div>
+                            <div class="upload-text" id="text2">Arrastra o haz clic para seleccionar</div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="btnProcesar" disabled>
+                        Procesar Archivos
+                    </button>
+                </form>
+                <div class="status" id="status"></div>
+            </div>
+        </div>
+
+        <!-- TAB 2: NUEVO PROCESO -->
+        <div class="tab-content" id="tab-nuevo">
+            <div class="card">
+                <div class="card-title">
+                    <h2>Nuevo Proceso</h2>
+                    <p>Describe el proceso y sube archivos de ejemplo</p>
+                </div>
+                <form id="nuevoForm">
+                    <div class="field">
+                        <label>Nombre del proceso</label>
+                        <input type="text" id="nombreProceso" placeholder="Ej: Consolidado de despachos, Reporte cobertura...">
+                    </div>
+                    <div class="field">
+                        <label>Explicacion del proceso</label>
+                        <textarea id="explicacion" placeholder="Describe paso a paso que hace este proceso:&#10;&#10;- Que archivos se usan como entrada?&#10;- Que columnas o datos son importantes?&#10;- Que resultado se espera?&#10;- Alguna regla o condicion especial?&#10;&#10;Mientras mas detalle, mejor..."></textarea>
+                        <div class="hint">Escribe todo lo que necesites. Puedes incluir ejemplos, reglas, excepciones, etc.</div>
+                    </div>
+                    <div class="field">
+                        <label>Archivos de ejemplo (opcional)</label>
+                        <div class="upload-area" id="areaNuevo">
+                            <input type="file" id="archivosEjemplo" multiple accept=".xlsx,.xls,.csv,.pdf,.txt,.png,.jpg,.jpeg">
+                            <div class="upload-icon">&#128206;</div>
+                            <div class="upload-text" id="textNuevo">Arrastra o haz clic para agregar archivos</div>
+                        </div>
+                        <div class="hint">Sube archivos de entrada de ejemplo y/o el resultado esperado. Acepta xlsx, csv, pdf, txt, imagenes.</div>
+                        <div class="file-list" id="fileList"></div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="btnNuevo" disabled>
+                        Descargar Paquete del Proceso
+                    </button>
+                    <div class="hint" style="text-align:center; margin-top: 12px;">
+                        Se descargara un ZIP con la explicacion + archivos para procesarlo con IA
+                    </div>
+                </form>
+                <div class="status" id="statusNuevo"></div>
+            </div>
         </div>
     </div>
+
     <script>
+        // === TAB SWITCHING ===
+        function switchTab(tab) {
+            document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab-' + tab).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // === TAB 1: CRUCE PLACAS RUTAS ===
         const archivo1 = document.getElementById('archivo1');
         const archivo2 = document.getElementById('archivo2');
         const btnProcesar = document.getElementById('btnProcesar');
@@ -212,6 +339,95 @@ HTML_PAGE = """<!DOCTYPE html>
             btnProcesar.textContent = 'Procesar Archivos';
             btnProcesar.disabled = false;
         });
+
+        // === TAB 2: NUEVO PROCESO ===
+        const nombreProceso = document.getElementById('nombreProceso');
+        const explicacion = document.getElementById('explicacion');
+        const archivosEjemplo = document.getElementById('archivosEjemplo');
+        const btnNuevo = document.getElementById('btnNuevo');
+        const statusNuevo = document.getElementById('statusNuevo');
+        const fileList = document.getElementById('fileList');
+        const areaNuevo = document.getElementById('areaNuevo');
+        let archivosAgregados = [];
+
+        function checkNuevoReady() {
+            btnNuevo.disabled = !(nombreProceso.value.trim() && explicacion.value.trim());
+        }
+
+        nombreProceso.addEventListener('input', checkNuevoReady);
+        explicacion.addEventListener('input', checkNuevoReady);
+
+        archivosEjemplo.addEventListener('change', () => {
+            for (const f of archivosEjemplo.files) {
+                if (!archivosAgregados.some(a => a.name === f.name && a.size === f.size)) {
+                    archivosAgregados.push(f);
+                }
+            }
+            renderFileList();
+            archivosEjemplo.value = '';
+        });
+
+        function renderFileList() {
+            if (archivosAgregados.length === 0) {
+                fileList.innerHTML = '';
+                areaNuevo.classList.remove('has-file');
+                document.getElementById('textNuevo').textContent = 'Arrastra o haz clic para agregar archivos';
+                return;
+            }
+            areaNuevo.classList.add('has-file');
+            document.getElementById('textNuevo').innerHTML = '<span class="filename">' + archivosAgregados.length + ' archivo(s) agregado(s)</span>';
+            fileList.innerHTML = archivosAgregados.map((f, i) =>
+                '<div class="file-item">' +
+                    '<span class="fname">' + f.name + '</span>' +
+                    '<span class="fsize">' + (f.size / 1024).toFixed(1) + ' KB</span>' +
+                    '<button type="button" class="remove-btn" onclick="removeFile(' + i + ')">&#10005;</button>' +
+                '</div>'
+            ).join('');
+        }
+
+        function removeFile(idx) {
+            archivosAgregados.splice(idx, 1);
+            renderFileList();
+        }
+
+        document.getElementById('nuevoForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            btnNuevo.disabled = true;
+            btnNuevo.textContent = 'Generando paquete...';
+            statusNuevo.className = 'status processing';
+            statusNuevo.innerHTML = '<span class="spinner"></span> Creando ZIP con la explicacion y archivos...';
+
+            const formData = new FormData();
+            formData.append('nombre', nombreProceso.value.trim());
+            formData.append('explicacion', explicacion.value.trim());
+            for (const f of archivosAgregados) {
+                formData.append('archivos', f);
+            }
+
+            try {
+                const response = await fetch('/api/nuevo-proceso', { method: 'POST', body: formData });
+                if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(data.error || 'Error desconocido');
+                }
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = nombreProceso.value.trim().replace(/\\s+/g, '-').toLowerCase() + '.zip';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+                statusNuevo.className = 'status success';
+                statusNuevo.textContent = 'Paquete descargado correctamente.';
+            } catch (err) {
+                statusNuevo.className = 'status error';
+                statusNuevo.textContent = 'Error: ' + err.message;
+            }
+            btnNuevo.textContent = 'Descargar Paquete del Proceso';
+            checkNuevoReady();
+        });
     </script>
 </body>
 </html>"""
@@ -267,6 +483,38 @@ def procesar_archivos():
         as_attachment=True,
         download_name=nombre_salida,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+
+
+@app.route('/api/nuevo-proceso', methods=['POST'])
+def nuevo_proceso():
+    nombre = request.form.get('nombre', '').strip()
+    explicacion = request.form.get('explicacion', '').strip()
+
+    if not nombre or not explicacion:
+        return jsonify({'error': 'Nombre y explicacion son obligatorios'}), 400
+
+    # Build ZIP in memory
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+        # Add the explanation as a text file
+        contenido = f"PROCESO: {nombre}\n{'=' * 60}\n\n{explicacion}\n"
+        zf.writestr('explicacion.txt', contenido)
+
+        # Add uploaded files
+        archivos = request.files.getlist('archivos')
+        for archivo in archivos:
+            if archivo.filename:
+                zf.writestr(f"archivos/{archivo.filename}", archivo.read())
+
+    zip_buffer.seek(0)
+    nombre_zip = nombre.replace(' ', '-').lower() + '.zip'
+
+    return send_file(
+        zip_buffer,
+        as_attachment=True,
+        download_name=nombre_zip,
+        mimetype='application/zip'
     )
 
 
