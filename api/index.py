@@ -465,7 +465,7 @@ def procesar_archivos():
 
     try:
         procesar(ruta1, ruta2, ruta_salida)
-    except Exception as e:
+    except BaseException as e:
         for f in [ruta1, ruta2]:
             if os.path.exists(f):
                 os.remove(f)

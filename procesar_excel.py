@@ -32,8 +32,7 @@ def detectar_archivos(ruta_carpeta):
     archivos_xlsx = [f for f in archivos_xlsx if not os.path.basename(f).startswith("~$")]
 
     if len(archivos_xlsx) < 2:
-        print("Error: Se necesitan al menos 2 archivos .xlsx en la carpeta.")
-        sys.exit(1)
+        raise Exception("Se necesitan al menos 2 archivos .xlsx en la carpeta.")
 
     archivo1 = None
     archivo2 = None
@@ -60,11 +59,7 @@ def detectar_archivos(ruta_carpeta):
             continue
 
     if archivo1 is None or archivo2 is None:
-        print("No se pudieron identificar los archivos automáticamente.")
-        print("Archivos encontrados:")
-        for f in archivos_xlsx:
-            print(f"  - {os.path.basename(f)}")
-        sys.exit(1)
+        raise Exception("No se pudieron identificar los archivos automáticamente.")
 
     return archivo1, archivo2
 
@@ -85,8 +80,7 @@ def extraer_mapeo_archivo1(ruta_archivo1):
             break
 
     if hoja_prog is None:
-        print("Error: No se encontró la hoja PROGRAMACIÓN en el Archivo 1.")
-        sys.exit(1)
+        raise Exception("No se encontró la hoja PROGRAMACIÓN en el Archivo 1.")
 
     # Encontrar la fila de encabezados
     header_row = None
@@ -116,9 +110,7 @@ def extraer_mapeo_archivo1(ruta_archivo1):
                 col_map["cargo"] = c
 
     if "n_transporte" not in col_map or "placa" not in col_map:
-        print("Error: No se encontraron las columnas necesarias en PROGRAMACIÓN.")
-        print(f"Columnas encontradas: {col_map}")
-        sys.exit(1)
+        raise Exception(f"No se encontraron las columnas necesarias en PROGRAMACIÓN. Columnas encontradas: {col_map}")
 
     # Extraer mapeo
     mapeo = {}
