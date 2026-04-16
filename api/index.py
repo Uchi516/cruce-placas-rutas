@@ -443,7 +443,7 @@ HTML_PAGE = """<!DOCTYPE html>
             checkNuevoReady();
         });
     </script>
-    <div class="version-tag">v1.8 | Actualizado: 16/04/2026 10:43</div>
+    <div class="version-tag">v1.9 | Actualizado: 16/04/2026 11:32</div>
 </body>
 </html>"""
 

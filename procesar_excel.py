@@ -176,9 +176,17 @@ def modify_sheet_xml(sheet_xml_bytes, cell_updates):
                 if row_match:
                     xml_str = xml_str[:row_match.end(2)] + cell_xml + xml_str[row_match.end(2):]
                 else:
-                    # Row doesn't exist - insert before </sheetData>
+                    # Row doesn't exist - insert in correct sorted position
                     new_row = f'<row r="{row_num}">{cell_xml}</row>'
-                    xml_str = xml_str.replace('</sheetData>', new_row + '</sheetData>')
+                    # Find the first row with r > row_num to insert before it
+                    inserted = False
+                    for m in re.finditer(r'<row\b[^>]*\s+r="(\d+)"', xml_str):
+                        if int(m.group(1)) > row_num:
+                            xml_str = xml_str[:m.start()] + new_row + xml_str[m.start():]
+                            inserted = True
+                            break
+                    if not inserted:
+                        xml_str = xml_str.replace('</sheetData>', new_row + '</sheetData>')
 
     return xml_str.encode('utf-8')
 
