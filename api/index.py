@@ -168,6 +168,13 @@ HTML_PAGE = """<!DOCTYPE html>
         }
         .step.active .step-num { background: #3b82f6; color: white; }
         .step.done .step-num { background: #22c55e; color: white; }
+
+        /* --- VERSION TAG --- */
+        .version-tag {
+            position: fixed; bottom: 10px; right: 14px;
+            font-size: 10px; color: #475569; line-height: 1.4;
+            text-align: right; pointer-events: none;
+        }
     </style>
 </head>
 <body>
@@ -429,6 +436,7 @@ HTML_PAGE = """<!DOCTYPE html>
             checkNuevoReady();
         });
     </script>
+    <div class="version-tag">v1.2 | Actualizado: 16/04/2026 12:45</div>
 </body>
 </html>"""
 
