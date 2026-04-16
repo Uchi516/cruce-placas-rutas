@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.tmp
+*.xlsx
+.vercel/
+venv/
+.env
