@@ -438,7 +438,7 @@ HTML_PAGE = """<!DOCTYPE html>
             checkNuevoReady();
         });
     </script>
-    <div class="version-tag">v1.3 | Actualizado: 16/04/2026 07:55</div>
+    <div class="version-tag">v1.4 | Actualizado: 16/04/2026 09:39</div>
 </body>
 </html>"""
 
