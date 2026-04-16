@@ -137,23 +137,12 @@ def get_sheet_file_map(z):
     return name_to_file
 
 
-def modify_sheet_xml(sheet_xml_bytes, cell_updates, shared_strings=None):
+def modify_sheet_xml(sheet_xml_bytes, cell_updates):
     """
-    Modify cells in a sheet XML. cell_updates is dict: {(row, col): value}
-    Values are written as inline strings for text, or as numbers.
+    Modify cells in a sheet XML using string manipulation to preserve
+    original namespaces exactly. cell_updates: {(row, col): value}
     """
-    tree = ET.ElementTree(ET.fromstring(sheet_xml_bytes))
-    root = tree.getroot()
-
-    sheet_data = root.find(f'{{{NS}}}sheetData')
-    if sheet_data is None:
-        sheet_data = ET.SubElement(root, f'{{{NS}}}sheetData')
-
-    # Index existing rows
-    existing_rows = {}
-    for row_el in sheet_data.findall(f'{{{NS}}}row'):
-        r = int(row_el.get('r'))
-        existing_rows[r] = row_el
+    xml_str = sheet_xml_bytes.decode('utf-8')
 
     # Group updates by row
     updates_by_row = defaultdict(dict)
@@ -161,41 +150,37 @@ def modify_sheet_xml(sheet_xml_bytes, cell_updates, shared_strings=None):
         updates_by_row[row][col] = value
 
     for row_num in sorted(updates_by_row.keys()):
-        if row_num in existing_rows:
-            row_el = existing_rows[row_num]
-        else:
-            row_el = ET.SubElement(sheet_data, f'{{{NS}}}row')
-            row_el.set('r', str(row_num))
-
-        # Index existing cells in this row
-        existing_cells = {}
-        for c_el in row_el.findall(f'{{{NS}}}c'):
-            existing_cells[c_el.get('r')] = c_el
-
         for col_num, value in updates_by_row[row_num].items():
             ref = f'{col_letter(col_num)}{row_num}'
-            if ref in existing_cells:
-                c_el = existing_cells[ref]
-                # Clear existing content
-                for child in list(c_el):
-                    c_el.remove(child)
-            else:
-                c_el = ET.SubElement(row_el, f'{{{NS}}}c')
-                c_el.set('r', ref)
 
             if value is None:
                 continue
-            elif isinstance(value, (int, float)):
-                c_el.attrib.pop('t', None)
-                v_el = ET.SubElement(c_el, f'{{{NS}}}v')
-                v_el.text = str(value)
-            else:
-                c_el.set('t', 'inlineStr')
-                is_el = ET.SubElement(c_el, f'{{{NS}}}is')
-                t_el = ET.SubElement(is_el, f'{{{NS}}}t')
-                t_el.text = str(value)
 
-    return ET.tostring(root, xml_declaration=True, encoding='UTF-8')
+            # Build the cell XML
+            if isinstance(value, (int, float)):
+                cell_xml = f'<c r="{ref}"><v>{value}</v></c>'
+            else:
+                # Escape XML special chars
+                escaped = str(value).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                cell_xml = f'<c r="{ref}" t="inlineStr"><is><t>{escaped}</t></is></c>'
+
+            # Check if cell already exists in the row
+            cell_pattern = rf'<c\s+r="{ref}"[^/]*(?:/>|>.*?</c>)'
+            if re.search(cell_pattern, xml_str, re.DOTALL):
+                # Replace existing cell
+                xml_str = re.sub(cell_pattern, cell_xml, xml_str, count=1, flags=re.DOTALL)
+            else:
+                # Find the row and append the cell before </row>
+                row_pattern = rf'(<row[^>]*\s+r="{row_num}"[^>]*>)(.*?)(</row>)'
+                row_match = re.search(row_pattern, xml_str, re.DOTALL)
+                if row_match:
+                    xml_str = xml_str[:row_match.end(2)] + cell_xml + xml_str[row_match.end(2):]
+                else:
+                    # Row doesn't exist - insert before </sheetData>
+                    new_row = f'<row r="{row_num}">{cell_xml}</row>'
+                    xml_str = xml_str.replace('</sheetData>', new_row + '</sheetData>')
+
+    return xml_str.encode('utf-8')
 
 
 def build_new_sheet_xml(rows_data):
@@ -247,13 +232,14 @@ def build_new_sheet_xml(rows_data):
 def add_sheets_to_workbook(z_in, z_out, new_sheets, insert_before_sheet="RUTA"):
     """
     Copy all files from z_in to z_out, adding new sheets.
+    Uses string manipulation instead of ElementTree to preserve
+    original XML namespaces exactly as Excel expects them.
     new_sheets: list of (sheet_name, sheet_xml_bytes)
     """
     with zipfile.ZipFile(z_in, 'r') as zr:
-        sheet_map = get_sheet_file_map(zr)
         all_files = zr.namelist()
 
-        # Find the highest existing sheet number
+        # Find highest sheet number
         max_sheet_num = 0
         for fname in all_files:
             if fname.startswith('xl/worksheets/sheet') and fname.endswith('.xml'):
@@ -263,75 +249,66 @@ def add_sheets_to_workbook(z_in, z_out, new_sheets, insert_before_sheet="RUTA"):
                 except ValueError:
                     pass
 
-        # Find highest rId
-        rels_xml = ET.fromstring(zr.read('xl/_rels/workbook.xml.rels'))
+        # Find highest rId and sheetId from workbook XML
+        wb_text = zr.read('xl/workbook.xml').decode('utf-8')
+        rels_text = zr.read('xl/_rels/workbook.xml.rels').decode('utf-8')
+        ct_text = zr.read('[Content_Types].xml').decode('utf-8')
+
         max_rid = 0
-        for rel in rels_xml.iter():
-            rid = rel.get('Id')
-            if rid and rid.startswith('rId'):
-                try:
-                    max_rid = max(max_rid, int(rid[3:]))
-                except ValueError:
-                    pass
+        for m in re.finditer(r'rId(\d+)', rels_text):
+            max_rid = max(max_rid, int(m.group(1)))
+
+        max_sheet_id = 0
+        for m in re.finditer(r'sheetId="(\d+)"', wb_text):
+            max_sheet_id = max(max_sheet_id, int(m.group(1)))
 
         # Prepare new sheet info
         new_sheet_info = []
         for i, (name, xml_bytes) in enumerate(new_sheets):
             sheet_num = max_sheet_num + 1 + i
             rid = f'rId{max_rid + 1 + i}'
+            sheet_id = max_sheet_id + 1 + i
             fname = f'xl/worksheets/sheet{sheet_num}.xml'
-            new_sheet_info.append((name, rid, fname, xml_bytes))
+            new_sheet_info.append((name, rid, sheet_id, fname, xml_bytes))
 
-        # Read and modify workbook.xml
-        wb_xml = ET.fromstring(zr.read('xl/workbook.xml'))
-        sheets_el = wb_xml.find(f'{{{NS}}}sheets')
+        # Remove existing Hoja3/Hoja8 entries from workbook.xml
+        for name, *_ in new_sheet_info:
+            wb_text = re.sub(rf'<sheet[^>]*name="{name}"[^/]*/>', '', wb_text)
 
-        # Find sheetId max
-        max_sheet_id = 0
-        for s in sheets_el.findall(f'{{{NS}}}sheet'):
-            try:
-                max_sheet_id = max(max_sheet_id, int(s.get('sheetId', '0')))
-            except ValueError:
-                pass
+        # Insert new sheet entries before the target sheet
+        insert_tag = f'name="{insert_before_sheet}"'
+        new_sheet_tags = ''
+        for name, rid, sheet_id, fname, xml_bytes in new_sheet_info:
+            new_sheet_tags += f'<sheet name="{name}" sheetId="{sheet_id}" r:id="{rid}"/>'
 
-        # Remove existing Hoja3/Hoja8 if present
-        for s in list(sheets_el.findall(f'{{{NS}}}sheet')):
-            if s.get('name') in [ns[0] for ns in new_sheets]:
-                sheets_el.remove(s)
+        # Insert before the target sheet
+        insert_pos = wb_text.find(insert_tag)
+        if insert_pos >= 0:
+            # Find the start of the <sheet tag
+            tag_start = wb_text.rfind('<sheet', 0, insert_pos)
+            wb_text = wb_text[:tag_start] + new_sheet_tags + wb_text[tag_start:]
+        else:
+            # Fallback: insert before </sheets>
+            wb_text = wb_text.replace('</sheets>', new_sheet_tags + '</sheets>')
 
-        # Find insert position (before RUTA)
-        insert_idx = len(list(sheets_el))
-        for idx, s in enumerate(sheets_el.findall(f'{{{NS}}}sheet')):
-            if s.get('name') == insert_before_sheet:
-                insert_idx = idx
-                break
+        modified_wb = wb_text.encode('utf-8')
 
-        for i, (name, rid, fname, xml_bytes) in enumerate(new_sheet_info):
-            sheet_el = ET.Element(f'{{{NS}}}sheet')
-            sheet_el.set('name', name)
-            sheet_el.set('sheetId', str(max_sheet_id + 1 + i))
-            sheet_el.set(f'{{{NS_R}}}id', rid)
-            sheets_el.insert(insert_idx + i, sheet_el)
+        # Add new relationships to workbook.xml.rels
+        new_rels = ''
+        for name, rid, sheet_id, fname, xml_bytes in new_sheet_info:
+            target = fname.replace('xl/', '')
+            new_rels += f'<Relationship Id="{rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="{target}"/>'
 
-        modified_wb = ET.tostring(wb_xml, xml_declaration=True, encoding='UTF-8')
+        rels_text = rels_text.replace('</Relationships>', new_rels + '</Relationships>')
+        modified_rels = rels_text.encode('utf-8')
 
-        # Modify workbook.xml.rels
-        for name, rid, fname, xml_bytes in new_sheet_info:
-            rel_el = ET.SubElement(rels_xml, 'Relationship')
-            rel_el.set('Id', rid)
-            rel_el.set('Type', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet')
-            rel_el.set('Target', fname.replace('xl/', ''))
+        # Add content types for new sheets
+        new_overrides = ''
+        for name, rid, sheet_id, fname, xml_bytes in new_sheet_info:
+            new_overrides += f'<Override PartName="/{fname}" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
 
-        modified_rels = ET.tostring(rels_xml, xml_declaration=True, encoding='UTF-8')
-
-        # Modify [Content_Types].xml
-        ct_xml = ET.fromstring(zr.read('[Content_Types].xml'))
-        for name, rid, fname, xml_bytes in new_sheet_info:
-            override = ET.SubElement(ct_xml, 'Override')
-            override.set('PartName', f'/{fname}')
-            override.set('ContentType', 'application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml')
-
-        modified_ct = ET.tostring(ct_xml, xml_declaration=True, encoding='UTF-8')
+        ct_text = ct_text.replace('</Types>', new_overrides + '</Types>')
+        modified_ct = ct_text.encode('utf-8')
 
         # Write everything to output
         with zipfile.ZipFile(z_out, 'w', zipfile.ZIP_DEFLATED) as zw:
@@ -346,7 +323,7 @@ def add_sheets_to_workbook(z_in, z_out, new_sheets, insert_before_sheet="RUTA"):
                     zw.writestr(item, zr.read(item.filename))
 
             # Add new sheet files
-            for name, rid, fname, xml_bytes in new_sheet_info:
+            for name, rid, sheet_id, fname, xml_bytes in new_sheet_info:
                 zw.writestr(fname, xml_bytes)
 
 
