@@ -38,12 +38,12 @@ HTML_PAGE = """<!DOCTYPE html>
             padding: 0 24px; gap: 4px;
         }
         .nav-brand {
-            font-size: 15px; font-weight: 700; color: #94a3b8;
-            margin-right: 24px; padding: 16px 0;
+            font-size: 14px; font-weight: 700; color: #94a3b8;
+            margin-right: 24px; padding: 12px 0;
             letter-spacing: 0.5px;
         }
         .nav-tab {
-            padding: 14px 20px; font-size: 14px; font-weight: 500;
+            padding: 12px 18px; font-size: 13px; font-weight: 500;
             color: #64748b; cursor: pointer; border: none; background: none;
             border-bottom: 2px solid transparent; transition: all 0.2s;
         }
@@ -51,28 +51,28 @@ HTML_PAGE = """<!DOCTYPE html>
         .nav-tab.active { color: #3b82f6; border-bottom-color: #3b82f6; }
 
         /* --- MAIN --- */
-        .main { display: flex; align-items: center; justify-content: center; min-height: calc(100vh - 53px); padding: 24px; }
-        .tab-content { display: none; width: 100%; max-width: 640px; }
+        .main { display: flex; justify-content: center; padding: 20px; }
+        .tab-content { display: none; width: 100%; max-width: 580px; }
         .tab-content.active { display: block; }
 
         /* --- CARD --- */
         .card {
-            background: #1e293b; border-radius: 16px; padding: 40px;
+            background: #1e293b; border-radius: 14px; padding: 28px 32px;
             box-shadow: 0 25px 50px rgba(0,0,0,0.4); border: 1px solid #334155;
         }
-        .card-title { text-align: center; margin-bottom: 32px; }
-        .card-title h2 { font-size: 22px; font-weight: 700; color: #f8fafc; margin-bottom: 4px; }
-        .card-title p { color: #94a3b8; font-size: 14px; }
+        .card-title { text-align: center; margin-bottom: 20px; }
+        .card-title h2 { font-size: 20px; font-weight: 700; color: #f8fafc; margin-bottom: 2px; }
+        .card-title p { color: #94a3b8; font-size: 13px; }
 
         /* --- UPLOAD --- */
-        .upload-section { margin-bottom: 24px; }
+        .upload-section { margin-bottom: 16px; }
         .upload-section label {
-            display: block; font-size: 13px; font-weight: 600; color: #94a3b8;
-            text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
+            display: block; font-size: 12px; font-weight: 600; color: #94a3b8;
+            text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
         }
         .upload-area {
-            position: relative; border: 2px dashed #334155; border-radius: 12px;
-            padding: 24px; text-align: center; cursor: pointer;
+            position: relative; border: 2px dashed #334155; border-radius: 10px;
+            padding: 16px; text-align: center; cursor: pointer;
             transition: all 0.2s; background: #0f172a;
         }
         .upload-area:hover { border-color: #3b82f6; background: rgba(59,130,246,0.05); }
@@ -81,32 +81,32 @@ HTML_PAGE = """<!DOCTYPE html>
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             opacity: 0; cursor: pointer;
         }
-        .upload-icon { font-size: 32px; margin-bottom: 8px; }
-        .upload-text { color: #64748b; font-size: 14px; }
+        .upload-icon { font-size: 24px; margin-bottom: 4px; }
+        .upload-text { color: #64748b; font-size: 13px; }
         .upload-text .filename { color: #22c55e; font-weight: 600; }
 
         /* --- FORM FIELDS --- */
-        .field { margin-bottom: 20px; }
+        .field { margin-bottom: 14px; }
         .field label {
-            display: block; font-size: 13px; font-weight: 600; color: #94a3b8;
-            text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
+            display: block; font-size: 12px; font-weight: 600; color: #94a3b8;
+            text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
         }
         .field input[type="text"], .field textarea {
             width: 100%; background: #0f172a; border: 1px solid #334155;
-            border-radius: 10px; padding: 14px 16px; color: #e2e8f0;
-            font-size: 14px; font-family: inherit; transition: border-color 0.2s;
+            border-radius: 10px; padding: 10px 14px; color: #e2e8f0;
+            font-size: 13px; font-family: inherit; transition: border-color 0.2s;
             outline: none;
         }
         .field input[type="text"]:focus, .field textarea:focus { border-color: #3b82f6; }
-        .field textarea { min-height: 160px; resize: vertical; line-height: 1.6; }
-        .field .hint { color: #475569; font-size: 12px; margin-top: 6px; }
+        .field textarea { min-height: 110px; resize: vertical; line-height: 1.5; }
+        .field .hint { color: #475569; font-size: 11px; margin-top: 4px; }
 
         /* --- FILE LIST --- */
-        .file-list { margin-top: 12px; }
+        .file-list { margin-top: 8px; }
         .file-item {
             display: flex; align-items: center; justify-content: space-between;
             background: #0f172a; border: 1px solid #334155; border-radius: 8px;
-            padding: 10px 14px; margin-bottom: 8px; font-size: 13px;
+            padding: 8px 12px; margin-bottom: 6px; font-size: 12px;
         }
         .file-item .fname { color: #22c55e; font-weight: 600; }
         .file-item .fsize { color: #64748b; }
@@ -118,8 +118,8 @@ HTML_PAGE = """<!DOCTYPE html>
 
         /* --- BUTTONS --- */
         .btn {
-            width: 100%; padding: 16px; border: none; border-radius: 12px;
-            font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s; margin-top: 8px;
+            width: 100%; padding: 13px; border: none; border-radius: 10px;
+            font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; margin-top: 6px;
         }
         .btn-primary { background: #3b82f6; color: white; }
         .btn-primary:hover {
@@ -135,8 +135,8 @@ HTML_PAGE = """<!DOCTYPE html>
 
         /* --- STATUS --- */
         .status {
-            margin-top: 20px; padding: 16px; border-radius: 10px;
-            font-size: 14px; display: none;
+            margin-top: 14px; padding: 12px; border-radius: 10px;
+            font-size: 13px; display: none;
         }
         .status.processing {
             display: block; background: rgba(59,130,246,0.1);
@@ -159,7 +159,7 @@ HTML_PAGE = """<!DOCTYPE html>
         @keyframes spin { to { transform: rotate(360deg); } }
 
         /* --- STEPS --- */
-        .steps { display: flex; justify-content: center; gap: 32px; margin-bottom: 32px; }
+        .steps { display: flex; justify-content: center; gap: 28px; margin-bottom: 20px; }
         .step { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #64748b; }
         .step-num {
             width: 24px; height: 24px; border-radius: 50%; background: #334155;
@@ -246,8 +246,8 @@ HTML_PAGE = """<!DOCTYPE html>
                     <button type="submit" class="btn btn-primary" id="btnNuevo" disabled>
                         Descargar Paquete del Proceso
                     </button>
-                    <div class="hint" style="text-align:center; margin-top: 12px;">
-                        Se descargara un ZIP con la explicacion + archivos para procesarlo con IA
+                    <div class="hint" style="text-align:center; margin-top: 8px;">
+                        Se descarga un ZIP con la explicacion + archivos para procesarlo con IA
                     </div>
                 </form>
                 <div class="status" id="statusNuevo"></div>
